@@ -1,39 +1,63 @@
-var invert = require('invert-hash')
+/* @flow */
 
-var mh = module.exports = function () {
-  if (arguments.length === 1) {
-    return mh.decode.apply(this, arguments)
-  } else if (arguments.length > 1) {
-    return mh.encode.apply(this, arguments)
-  }
+// -- Type Defs
 
-  throw new Error('multihash must be called with the encode or decode parameters.')
+type Decoded = {
+  code: number,
+  name: string,
+  length: number,
+  digest: Buffer
 }
 
-// the multihash tables
+// -- Helper Functions
 
-mh.names = {
+function invert (map) {
+  const reverse = new Map()
+
+  for (let key of map.keys()) {
+    reverse.set(map.get(key), key)
+  }
+}
+
+// -- Export
+
+const mh = module.exports = function (hashOrDigest: Buffer, hashfn: string | number, length: number): Buffer | Decoded {
+  if (hashOrDigest == null) {
+    throw new Error('multihash must be called with the encode or decode parameters.')
+  }
+
+  if (hashfn != null) {
+    return mh.encode(hashOrDigest, hashfn, length)
+  }
+
+  return mh.decode(hashOrDigest)
+}
+
+// -- Multihash Tables
+
+mh.names = new Map({
   'sha1': 0x11,
   'sha2-256': 0x12,
   'sha2-512': 0x13,
   'sha3': 0x14,
   'blake2b': 0x40,
   'blake2s': 0x41
-}
+})
 
 mh.codes = invert(mh.names)
 
-mh.defaultLengths = {
-  0x11: 20,
-  0x12: 32,
-  0x13: 64,
-  0x14: 64,
-  0x40: 64,
-  0x41: 32
-}
+mh.defaultLengths = new Map([
+  [0x11, 20],
+  [0x12, 32],
+  [0x13, 64],
+  [0x14, 64],
+  [0x40, 64],
+  [0x41, 3],
+])
 
-// encode(hashfn, [length,] digest)
-mh.encode = function MultihashEncode (digest, hashfn, length) {
+// -- Functions
+
+mh.encode = function MultihashEncode (digest: Buffer, hashfn: string | number, length: number): Buffer {
   if (!digest || !hashfn) {
     throw new Error('multihash encode requires at least two args: hashfn, digest')
   }
@@ -60,22 +84,23 @@ mh.encode = function MultihashEncode (digest, hashfn, length) {
   return Buffer.concat([new Buffer([hashfn, length]), digest])
 }
 
-// decode(mutlihash)
-mh.decode = function MultihashDecode (multihash) {
-  var err = mh.validate(multihash)
+mh.decode = function MultihashDecode (multihash: Buffer): Decoded {
+  const err = mh.validate(multihash)
   if (err) {
     throw err
   }
 
-  var output = {}
-  output.code = multihash[0]
-  output.name = mh.codes[output.code]
-  output.length = multihash[1]
-  output.digest = multihash.slice(2)
-  return output
+  const code = multihash[0]
+
+  return {
+    code: code,
+    name: mh.codes.get(code),
+    length: multihash[1],
+    digest: multihash.slice(2)
+  }
 }
 
-mh.validate = function validateMultihash (multihash) {
+mh.validate = function validateMultihash (multihash: Buffer): ?Error {
   if (!(Buffer.isBuffer(multihash))) {
     return new Error('multihash must be a Buffer')
   }
@@ -88,18 +113,16 @@ mh.validate = function validateMultihash (multihash) {
     return new Error('multihash too long. must be < 129 bytes.')
   }
 
-  if (!mh.isAppCode(multihash[0]) && !mh.codes[multihash[0]]) {
+  if (!mh.isAppCode(multihash[0]) && !mh.codes.get(multihash[0])) {
     return new Error('multihash unknown function code: 0x' + multihash[0].toString(16))
   }
 
   if (multihash.slice(2).length !== multihash[1]) {
     return new Error('multihash length inconsistent: 0x' + multihash.toString('hex'))
   }
-
-  return false
 }
 
-mh.coerceCode = function coerceCode (hashfn) {
+mh.coerceCode = function coerceCode (hashfn: string | number): number {
   var code = hashfn
   if (typeof hashfn === 'string') {
     if (!mh.names[hashfn]) {
@@ -112,13 +135,13 @@ mh.coerceCode = function coerceCode (hashfn) {
     throw new Error('Hash function code should be a number. Got: ' + code)
   }
 
-  if (!mh.codes[code] && !mh.isAppCode(code)) {
+  if (!mh.codes.get(code) && !mh.isAppCode(code)) {
     throw new Error('Unrecognized function code: ' + code)
   }
 
   return code
 }
 
-mh.isAppCode = function isAppCode (code) {
+mh.isAppCode = function isAppCode (code: number): boolean {
   return code > 0 && code < 0x10
 }

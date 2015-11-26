@@ -1,0 +1,10 @@
+[ignore]
+.*/dist/.*
+
+[include]
+
+[libs]
+
+[options]
+strip_root=true
+module.system=node
