@@ -17,6 +17,8 @@ function invert (map) {
   for (let key of map.keys()) {
     reverse.set(map.get(key), key)
   }
+
+  return reverse
 }
 
 // -- Export
@@ -125,10 +127,10 @@ mh.validate = function validateMultihash (multihash: Buffer): ?Error {
 mh.coerceCode = function coerceCode (hashfn: string | number): number {
   var code = hashfn
   if (typeof hashfn === 'string') {
-    if (!mh.names[hashfn]) {
+    if (!mh.names.get(hashfn)) {
       throw new Error('Unrecognized hash function named: ' + hashfn)
     }
-    code = mh.names[hashfn]
+    code = mh.names.get(hashfn)
   }
 
   if (typeof code !== 'number') {
